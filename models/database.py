@@ -1,6 +1,6 @@
 import sqlite3
 from datetime import datetime
-from ..config import DEFAULT_CATEGORIES
+
 
 def init_db():
     conn = sqlite3.connect('finance_bot.db')
@@ -54,3 +54,61 @@ def init_db():
     
     conn.commit()
     conn.close()
+
+def is_user_registered(user_id):
+    conn = sqlite3.connect('finance_bot.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM users WHERE user_id = ?', (user_id,))
+    user = cursor.fetchone()
+    conn.close()
+    return user is not None
+
+def save_transaction(user_id, amount, category, trans_type, description=None):
+    conn = sqlite3.connect('finance_bot.db')
+    cursor = conn.cursor()
+    date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    
+    cursor.execute('INSERT INTO transactions (user_id, amount, category, type, date, description) VALUES (?, ?, ?, ?, ?, ?)',
+                  (user_id, amount, category, trans_type, date, description))
+    
+    if trans_type == 'expense':
+        update_goals_progress(user_id)
+    
+    conn.commit()
+    conn.close()
+
+def update_goals_progress(user_id):
+    conn = sqlite3.connect('finance_bot.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+    UPDATE goals 
+    SET current_amount = (
+        SELECT SUM(amount) 
+        FROM transactions 
+        WHERE user_id = ? AND type = 'income'
+    ) - (
+        SELECT SUM(amount) 
+        FROM transactions 
+        WHERE user_id = ? AND type = 'expense'
+    )
+    WHERE user_id = ? AND achieved = 0
+    ''', (user_id, user_id, user_id))
+    
+    cursor.execute('''
+    UPDATE goals 
+    SET achieved = 1 
+    WHERE user_id = ? AND current_amount >= target_amount AND achieved = 0
+    ''', (user_id,))
+    
+    conn.commit()
+    conn.close()
+
+def is_valid_category(user_id, category, cat_type):
+    conn = sqlite3.connect('finance_bot.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM categories WHERE user_id = ? AND name = ? AND type = ?', 
+                  (user_id, category, cat_type))
+    result = cursor.fetchone()
+    conn.close()
+    return result is not None
