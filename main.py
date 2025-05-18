@@ -8,5 +8,5 @@ from models.database import init_db
 
 if __name__ == '__main__':
     init_db()
-    print("Запуск WWWW--------------")
+    print("Запуск бота...........")
     bot.polling(none_stop=True, interval=1)
